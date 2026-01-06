@@ -1,0 +1,6 @@
+# JetBrains IDEs (IntelliJ IDEA, GoLand, etc.)
+.idea/
+
+# OS-specific files
+.DS_Store
+Thumbs.db
