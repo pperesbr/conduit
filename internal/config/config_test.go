@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func createTempConfig(t *testing.T, content string) string {
@@ -45,12 +46,12 @@ tunnels:
 		t.Errorf("expected host 'bastion.com', got '%s'", cfg.SSH.Host)
 	}
 
-	if len(cfg.Tunnels) != 1 {
-		t.Fatalf("expected 1 tunnel, got %d", len(cfg.Tunnels))
+	if len(cfg.TunnelConfigs) != 1 {
+		t.Fatalf("expected 1 tunnel, got %d", len(cfg.TunnelConfigs))
 	}
 
-	if cfg.Tunnels[0].Name != "sig" {
-		t.Errorf("expected tunnel name 'sig', got '%s'", cfg.Tunnels[0].Name)
+	if cfg.TunnelConfigs[0].Name != "sig" {
+		t.Errorf("expected tunnel name 'sig', got '%s'", cfg.TunnelConfigs[0].Name)
 	}
 }
 
@@ -149,8 +150,8 @@ tunnels:
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if len(cfg.Tunnels) != 3 {
-		t.Errorf("expected 3 tunnels, got %d", len(cfg.Tunnels))
+	if len(cfg.TunnelConfigs) != 3 {
+		t.Errorf("expected 3 tunnels, got %d", len(cfg.TunnelConfigs))
 	}
 }
 
@@ -381,5 +382,83 @@ tunnels:
 	_, err := Load(configPath)
 	if err == nil {
 		t.Fatal("expected error for invalid localPort")
+	}
+}
+
+func TestValidate_AutoRestartEnabled_NoInterval(t *testing.T) {
+	content := `
+ssh:
+  user: testuser
+  password: testpass
+  host: bastion.com
+
+tunnels:
+  - name: db
+    remoteHost: db-server
+    remotePort: 5432
+    localPort: 5432
+    autoRestart:
+      enabled: true
+`
+	configPath := createTempConfig(t, content)
+
+	_, err := Load(configPath)
+	if err == nil {
+		t.Fatal("expected error for autoRestart enabled without interval")
+	}
+}
+
+func TestValidate_AutoRestartDisabled_NoInterval(t *testing.T) {
+	content := `
+ssh:
+  user: testuser
+  password: testpass
+  host: bastion.com
+
+tunnels:
+  - name: db
+    remoteHost: db-server
+    remotePort: 5432
+    localPort: 5432
+    autoRestart:
+      enabled: false
+`
+	configPath := createTempConfig(t, content)
+
+	_, err := Load(configPath)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestValidate_AutoRestartValid(t *testing.T) {
+	content := `
+ssh:
+  user: testuser
+  password: testpass
+  host: bastion.com
+
+tunnels:
+  - name: db
+    remoteHost: db-server
+    remotePort: 5432
+    localPort: 5432
+    autoRestart:
+      enabled: true
+      interval: 30s
+`
+	configPath := createTempConfig(t, content)
+
+	cfg, err := Load(configPath)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !cfg.TunnelConfigs[0].AutoRestart.Enabled {
+		t.Error("expected autoRestart to be enabled")
+	}
+
+	if cfg.TunnelConfigs[0].AutoRestart.Interval != 30*time.Second {
+		t.Errorf("expected interval 30s, got %v", cfg.TunnelConfigs[0].AutoRestart.Interval)
 	}
 }

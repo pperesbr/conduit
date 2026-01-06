@@ -3,7 +3,7 @@ module github.com/pperesbr/conduit
 go 1.25.4
 
 require (
-	github.com/pperesbr/gokit v0.0.0-20260106004035-438925f370db
+	github.com/pperesbr/gokit v0.0.0-20260106124209-820c2ba26ecd
 	gopkg.in/yaml.v3 v3.0.1
 )
 
