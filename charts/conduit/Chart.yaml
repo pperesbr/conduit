@@ -1,0 +1,16 @@
+apiVersion: v2
+name: conduit
+description: A secure SSH tunnel service for remote databases
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+maintainers:
+  - name: pperesbr
+    url: https://github.com/pperesbr
+sources:
+  - https://github.com/pperesbr/conduit
+keywords:
+  - ssh
+  - tunnel
+  - database
+  - oracle

@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "conduit.fullname" . }}
+  labels:
+    {{- include "conduit.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "conduit.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "conduit.selectorLabels" . | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    spec:
+      hostNetwork: {{ .Values.hostNetwork | default false }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - "-config"
+            - "/app/config/config.yaml"
+          env:
+            {{- if or .Values.ssh.password .Values.ssh.existingSecret }}
+            - name: SSH_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "conduit.secretName" . }}
+                  key: {{ .Values.ssh.secretKey }}
+            {{- end }}
+          ports:
+            {{- range .Values.tunnels }}
+            - name: {{ .name | trunc 15 }}
+              containerPort: {{ .localPort }}
+              protocol: TCP
+            {{- end }}
+          volumeMounts:
+            - name: config
+              mountPath: /app/config
+              readOnly: true
+            {{- if .Values.ssh.keySecret }}
+            - name: ssh-key
+              mountPath: /app/ssh
+              readOnly: true
+            {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "conduit.fullname" . }}
+        {{- if .Values.ssh.keySecret }}
+        - name: ssh-key
+          secret:
+            secretName: {{ .Values.ssh.keySecret }}
+            defaultMode: 0444
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

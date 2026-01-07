@@ -1,0 +1,76 @@
+# Conduit Helm Chart Values
+# Configuration file for deploying Conduit SSH tunnel manager
+
+# Container image configuration
+image:
+  # Container image repository
+  repository: ghcr.io/pperesbr/conduit
+  # Image tag to deploy
+  tag: "1.0.0"
+  # Image pull policy (IfNotPresent, Always, Never)
+  pullPolicy: IfNotPresent
+
+# Number of replicas to deploy
+replicaCount: 1
+
+# SSH connection configuration
+ssh:
+  # SSH server hostname or IP address
+  host: ""
+  # SSH server port
+  port: 22
+  # SSH username for authentication
+  user: ""
+  # SSH password (not recommended, use existingSecret instead)
+  password: ""
+  # Name of existing Kubernetes secret containing SSH credentials
+  existingSecret: ""
+  # Key name in the secret that contains the SSH password
+  secretKey: "ssh-password"
+  # Path to SSH private key file for key-based authentication
+  keyFile: ""
+  # Name of existing Kubernetes secret containing SSH private key for key-based authentication
+  keySecret: ""
+  # Key name in the secret that contains the SSH private key
+  keySecretKey: "ssh-key"
+
+# List of SSH tunnels to create
+# Each tunnel forwards traffic from a local port to a remote host/port through the SSH connection
+tunnels: []
+  # - name: database
+  #   remoteHost: oracle-database.internal
+  #   remotePort: 1521
+  #   localPort: 1521
+  #   autoRestart:
+  #     enabled: true
+  #     interval: 30s
+
+# Kubernetes service configuration
+service:
+  # Service type (ClusterIP, NodePort, LoadBalancer)
+  type: ClusterIP
+
+# Resource requests and limits for the container
+resources:
+  limits:
+    cpu: 100m
+    memory: 128Mi
+  requests:
+    cpu: 50m
+    memory: 64Mi
+
+# Node selector for pod assignment
+# Allows constraining pods to nodes with specific labels
+nodeSelector: {}
+
+# Tolerations for pod assignment
+# Allows pods to schedule on nodes with matching taints
+tolerations: []
+
+# Affinity rules for pod assignment
+# Defines advanced scheduling constraints for pod placement
+affinity: {}
+
+# Enable host network mode for the pod
+# When true, pod uses the host's network namespace instead of a separate network namespace
+hostNetwork: false
