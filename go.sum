@@ -1,3 +1,5 @@
+github.com/fsnotify/fsnotify v1.9.0 h1:2Ml+OJNzbYCTzsxtv8vKSFD9PbJjmhYF14k/jKC7S9k=
+github.com/fsnotify/fsnotify v1.9.0/go.mod h1:8jBTzvmWwFyi3Pb8djgCCO5IBqzKJ/Jwo8TRcHyHii0=
 github.com/pperesbr/gokit v0.0.0-20260106004035-438925f370db h1:D67L8OOwXMTd4a0JWnWTUPcEKNl0fXc3y1Gn4LM2ck0=
 github.com/pperesbr/gokit v0.0.0-20260106004035-438925f370db/go.mod h1:3j0Cr68ftKDKGTETStNEBk+pl2C9Bg5lDm04XiLr6sc=
 github.com/pperesbr/gokit v0.0.0-20260106124209-820c2ba26ecd h1:mGGHsJmwpPq6o3/eHiVRq1+nSIgRkVux8hj5+HBn4uA=

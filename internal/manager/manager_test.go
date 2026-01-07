@@ -608,3 +608,268 @@ func handleTestSSHConnection(conn net.Conn, config *ssh.ServerConfig) {
 		}
 	}
 }
+
+// TestReconcile_AddNewTunnel verifies the behavior of Reconcile when adding a new tunnel configuration to the manager.
+func TestReconcile_AddNewTunnel(t *testing.T) {
+	sshServer, sshCfg := setupTestSSHServer(t)
+	defer sshServer.Close()
+
+	mgr := NewManager(sshCfg)
+
+	if len(mgr.List()) != 0 {
+		t.Fatalf("expected 0 tunnels, got %d", len(mgr.List()))
+	}
+
+	newConfig := &config.Config{
+		SSH: *sshCfg,
+		TunnelConfigs: []config.TunnelConfig{
+			{Name: "sigitm", RemoteHost: "127.0.0.1", RemotePort: 1521, LocalPort: 0},
+		},
+	}
+
+	err := mgr.Reconcile(newConfig)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer mgr.StopAll()
+
+	if len(mgr.List()) != 1 {
+		t.Errorf("expected 1 tunnel, got %d", len(mgr.List()))
+	}
+
+	status := mgr.Status()
+	if status["sigitm"] != tunnel.StatusRunning {
+		t.Errorf("expected sigitm to be Running, got %s", status["sigitm"])
+	}
+}
+
+// TestReconcile_RemoveTunnel evaluates the behavior of the Reconcile function when a tunnel is removed from the configuration.
+func TestReconcile_RemoveTunnel(t *testing.T) {
+	sshServer, sshCfg := setupTestSSHServer(t)
+	defer sshServer.Close()
+
+	mgr := NewManager(sshCfg)
+
+	mgr.Add(config.TunnelConfig{Name: "sigitm", RemoteHost: "127.0.0.1", RemotePort: 1521, LocalPort: 0})
+	mgr.Add(config.TunnelConfig{Name: "ods", RemoteHost: "127.0.0.1", RemotePort: 1522, LocalPort: 0})
+	mgr.StartAll()
+
+	if len(mgr.List()) != 2 {
+		t.Fatalf("expected 2 tunnels, got %d", len(mgr.List()))
+	}
+
+	newConfig := &config.Config{
+		SSH: *sshCfg,
+		TunnelConfigs: []config.TunnelConfig{
+			{Name: "sigitm", RemoteHost: "127.0.0.1", RemotePort: 1521, LocalPort: 0},
+		},
+	}
+
+	err := mgr.Reconcile(newConfig)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer mgr.StopAll()
+
+	if len(mgr.List()) != 1 {
+		t.Errorf("expected 1 tunnel, got %d", len(mgr.List()))
+	}
+
+	if mgr.Get("sigitm") == nil {
+		t.Error("expected sigitm to exist")
+	}
+
+	if mgr.Get("ods") != nil {
+		t.Error("expected ods to be removed")
+	}
+}
+
+// TestReconcile_RestartChangedTunnel verifies that the Reconcile function properly restarts tunnels with changed configurations.
+func TestReconcile_RestartChangedTunnel(t *testing.T) {
+	sshServer, sshCfg := setupTestSSHServer(t)
+	defer sshServer.Close()
+
+	mgr := NewManager(sshCfg)
+
+	originalCfg := config.TunnelConfig{Name: "sigitm", RemoteHost: "127.0.0.1", RemotePort: 1521, LocalPort: 0}
+	mgr.Add(originalCfg)
+	mgr.Start("sigitm")
+
+	originalPort := mgr.Get("sigitm").LocalPort()
+
+	newConfig := &config.Config{
+		SSH: *sshCfg,
+		TunnelConfigs: []config.TunnelConfig{
+			{Name: "sigitm", RemoteHost: "127.0.0.1", RemotePort: 1522, LocalPort: 0}, // porta mudou
+		},
+	}
+
+	err := mgr.Reconcile(newConfig)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer mgr.StopAll()
+
+	status := mgr.Status()
+	if status["sigitm"] != tunnel.StatusRunning {
+		t.Errorf("expected sigitm to be Running, got %s", status["sigitm"])
+	}
+
+	mgr.mu.RLock()
+	savedCfg := mgr.configs["sigitm"]
+	mgr.mu.RUnlock()
+
+	if savedCfg.RemotePort != 1522 {
+		t.Errorf("expected remotePort 1522, got %d", savedCfg.RemotePort)
+	}
+
+	_ = originalPort
+}
+
+// TestReconcile_NoChanges verifies that the Manager properly handles reconciliation when no changes are made to the configuration.
+func TestReconcile_NoChanges(t *testing.T) {
+	sshServer, sshCfg := setupTestSSHServer(t)
+	defer sshServer.Close()
+
+	mgr := NewManager(sshCfg)
+
+	cfg := config.TunnelConfig{Name: "sigitm", RemoteHost: "127.0.0.1", RemotePort: 1521, LocalPort: 0}
+	mgr.Add(cfg)
+	mgr.Start("sigitm")
+
+	newConfig := &config.Config{
+		SSH: *sshCfg,
+		TunnelConfigs: []config.TunnelConfig{
+			{Name: "sigitm", RemoteHost: "127.0.0.1", RemotePort: 1521, LocalPort: 0},
+		},
+	}
+
+	err := mgr.Reconcile(newConfig)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer mgr.StopAll()
+
+	if len(mgr.List()) != 1 {
+		t.Errorf("expected 1 tunnel, got %d", len(mgr.List()))
+	}
+
+	status := mgr.Status()
+	if status["sigitm"] != tunnel.StatusRunning {
+		t.Errorf("expected sigitm to be Running, got %s", status["sigitm"])
+	}
+}
+
+// TestReconcile_MultipleChanges tests the Manager's ability to reconcile tunnel configurations with multiple changes.
+func TestReconcile_MultipleChanges(t *testing.T) {
+	sshServer, sshCfg := setupTestSSHServer(t)
+	defer sshServer.Close()
+
+	mgr := NewManager(sshCfg)
+
+	mgr.Add(config.TunnelConfig{Name: "sigitm", RemoteHost: "127.0.0.1", RemotePort: 1521, LocalPort: 0})
+	mgr.Add(config.TunnelConfig{Name: "ods", RemoteHost: "127.0.0.1", RemotePort: 1522, LocalPort: 0})
+	mgr.Add(config.TunnelConfig{Name: "postgres", RemoteHost: "127.0.0.1", RemotePort: 5432, LocalPort: 0})
+	mgr.StartAll()
+
+	newConfig := &config.Config{
+		SSH: *sshCfg,
+		TunnelConfigs: []config.TunnelConfig{
+			{Name: "sigitm", RemoteHost: "127.0.0.1", RemotePort: 1521, LocalPort: 0},
+			{Name: "postgres", RemoteHost: "127.0.0.1", RemotePort: 5433, LocalPort: 0}, // porta mudou
+			{Name: "mysql", RemoteHost: "127.0.0.1", RemotePort: 3306, LocalPort: 0},    // novo
+		},
+	}
+
+	err := mgr.Reconcile(newConfig)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer mgr.StopAll()
+
+	if len(mgr.List()) != 3 {
+		t.Errorf("expected 3 tunnels, got %d", len(mgr.List()))
+	}
+
+	if mgr.Get("sigitm") == nil {
+		t.Error("expected sigitm to exist")
+	}
+
+	if mgr.Get("postgres") == nil {
+		t.Error("expected postgres to exist")
+	}
+
+	if mgr.Get("mysql") == nil {
+		t.Error("expected mysql to exist")
+	}
+
+	if mgr.Get("ods") != nil {
+		t.Error("expected ods to be removed")
+	}
+}
+
+// TestTunnelConfigChanged validates if the tunnelConfigChanged function correctly detects changes in TunnelConfig values.
+func TestTunnelConfigChanged(t *testing.T) {
+	base := config.TunnelConfig{
+		Name:       "test",
+		RemoteHost: "host1",
+		RemotePort: 1521,
+		LocalPort:  1521,
+		AutoRestart: config.AutoRestartConfig{
+			Enabled:  true,
+			Interval: 30 * time.Second,
+		},
+	}
+
+	tests := []struct {
+		name    string
+		new     config.TunnelConfig
+		changed bool
+	}{
+		{
+			name:    "no change",
+			new:     base,
+			changed: false,
+		},
+		{
+			name:    "remoteHost changed",
+			new:     config.TunnelConfig{Name: "test", RemoteHost: "host2", RemotePort: 1521, LocalPort: 1521},
+			changed: true,
+		},
+		{
+			name:    "remotePort changed",
+			new:     config.TunnelConfig{Name: "test", RemoteHost: "host1", RemotePort: 1522, LocalPort: 1521},
+			changed: true,
+		},
+		{
+			name:    "localPort changed",
+			new:     config.TunnelConfig{Name: "test", RemoteHost: "host1", RemotePort: 1521, LocalPort: 1522},
+			changed: true,
+		},
+		{
+			name: "autoRestart enabled changed",
+			new: config.TunnelConfig{
+				Name: "test", RemoteHost: "host1", RemotePort: 1521, LocalPort: 1521,
+				AutoRestart: config.AutoRestartConfig{Enabled: false, Interval: 30 * time.Second},
+			},
+			changed: true,
+		},
+		{
+			name: "autoRestart interval changed",
+			new: config.TunnelConfig{
+				Name: "test", RemoteHost: "host1", RemotePort: 1521, LocalPort: 1521,
+				AutoRestart: config.AutoRestartConfig{Enabled: true, Interval: 60 * time.Second},
+			},
+			changed: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tunnelConfigChanged(base, tt.new)
+			if result != tt.changed {
+				t.Errorf("expected changed=%v, got %v", tt.changed, result)
+			}
+		})
+	}
+}

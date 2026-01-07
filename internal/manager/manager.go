@@ -2,6 +2,7 @@ package manager
 
 import (
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -261,6 +262,69 @@ func (m *Manager) Unhealthy() []HealthStatus {
 	return unhealthy
 }
 
+// Reconcile updates the Manager's state to match the provided configuration, modifying tunnel configurations as needed.
+func (m *Manager) Reconcile(newConfig *config.Config) error {
+	m.mu.Lock()
+	m.sshConfig = &newConfig.SSH
+	m.mu.Unlock()
+
+	currentNames := make(map[string]bool)
+	for _, name := range m.List() {
+		currentNames[name] = true
+	}
+
+	newNames := make(map[string]bool)
+	newConfigs := make(map[string]config.TunnelConfig)
+	for _, cfg := range newConfig.TunnelConfigs {
+		newNames[cfg.Name] = true
+		newConfigs[cfg.Name] = cfg
+	}
+
+	for name := range currentNames {
+		if !newNames[name] {
+			log.Printf("reconcile: removing tunnel %s", name)
+			if err := m.Remove(name); err != nil {
+				log.Printf("reconcile: failed to remove %s: %v", name, err)
+			}
+		}
+	}
+
+	for name, cfg := range newConfigs {
+		if !currentNames[name] {
+			log.Printf("reconcile: adding tunnel %s", name)
+			if err := m.Add(cfg); err != nil {
+				log.Printf("reconcile: failed to add %s: %v", name, err)
+				continue
+			}
+			if err := m.Start(name); err != nil {
+				log.Printf("reconcile: failed to start %s: %v", name, err)
+			}
+		}
+	}
+
+	for name, newCfg := range newConfigs {
+		if currentNames[name] {
+			m.mu.RLock()
+			oldCfg, exists := m.configs[name]
+			m.mu.RUnlock()
+
+			if exists && tunnelConfigChanged(oldCfg, newCfg) {
+				log.Printf("reconcile: tunnel %s changed, restarting", name)
+
+				m.mu.Lock()
+				m.configs[name] = newCfg
+				m.mu.Unlock()
+
+				if err := m.Restart(name); err != nil {
+					log.Printf("reconcile: failed to restart %s: %v", name, err)
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
 // Close terminates the Manager, stops all tunnels, and releases resources. Returns an error if any tunnel fails to stop.
 func (m *Manager) Close() error {
 	close(m.done)
@@ -322,4 +386,24 @@ func (m *Manager) stopAutoRestartForTunnel(name string) {
 		close(done)
 		delete(m.tunnelDones, name)
 	}
+}
+
+// tunnelConfigChanged checks if there are any differences between the old and new TunnelConfig structures.
+func tunnelConfigChanged(old, new config.TunnelConfig) bool {
+	if old.RemoteHost != new.RemoteHost {
+		return true
+	}
+	if old.RemotePort != new.RemotePort {
+		return true
+	}
+	if old.LocalPort != new.LocalPort {
+		return true
+	}
+	if old.AutoRestart.Enabled != new.AutoRestart.Enabled {
+		return true
+	}
+	if old.AutoRestart.Interval != new.AutoRestart.Interval {
+		return true
+	}
+	return false
 }
