@@ -49,17 +49,25 @@ go build -o conduit ./cmd/main.go
 # Pull from GitHub Container Registry
 docker pull ghcr.io/pperesbr/conduit:latest
 
+# Or specific version
+docker pull ghcr.io/pperesbr/conduit:1.2.0
+
 # Or build locally
 docker build -t conduit:latest .
 ```
 
 ### Helm (Kubernetes)
 ```bash
-# Clone the repository
+# Install directly from OCI registry (recommended)
+helm install conduit oci://ghcr.io/pperesbr/charts/conduit \
+  --version 1.2.0 \
+  --namespace conduit \
+  --create-namespace \
+  -f values.yaml
+
+# Or clone and install from source
 git clone https://github.com/pperesbr/conduit.git
 cd conduit
-
-# Install with Helm
 helm install conduit charts/conduit --namespace conduit --create-namespace
 ```
 
@@ -176,8 +184,9 @@ kubectl create secret generic conduit-ssh-key \
   --namespace conduit \
   --from-file=ssh-key=/path/to/your/private-key
 
-# 3. Install with Helm
-helm install conduit charts/conduit \
+# 3. Install with Helm from OCI registry
+helm install conduit oci://ghcr.io/pperesbr/charts/conduit \
+  --version 1.2.0 \
   --namespace conduit \
   --set ssh.host=bastion.example.com \
   --set ssh.port=22 \
@@ -204,8 +213,9 @@ helm install conduit charts/conduit \
 # 1. Create namespace
 kubectl create namespace conduit
 
-# 2. Install with Helm
-helm install conduit charts/conduit \
+# 2. Install with Helm from OCI registry
+helm install conduit oci://ghcr.io/pperesbr/charts/conduit \
+  --version 1.2.0 \
   --namespace conduit \
   --set ssh.host=bastion.example.com \
   --set ssh.port=22 \
@@ -222,6 +232,10 @@ helm install conduit charts/conduit \
 
 Create a `my-values.yaml`:
 ```yaml
+image:
+  repository: ghcr.io/pperesbr/conduit
+  tag: "1.2.0"
+
 ssh:
   host: bastion.example.com
   port: 22
@@ -259,7 +273,8 @@ resources:
 
 Install:
 ```bash
-helm install conduit charts/conduit \
+helm install conduit oci://ghcr.io/pperesbr/charts/conduit \
+  --version 1.2.0 \
   --namespace conduit \
   --create-namespace \
   -f my-values.yaml
@@ -267,7 +282,8 @@ helm install conduit charts/conduit \
 
 #### Upgrade
 ```bash
-helm upgrade conduit charts/conduit \
+helm upgrade conduit oci://ghcr.io/pperesbr/charts/conduit \
+  --version 1.2.0 \
   --namespace conduit \
   -f my-values.yaml
 ```
@@ -283,7 +299,7 @@ kubectl delete namespace conduit
 | Parameter | Description | Default |
 |-----------|-------------|---------|
 | `image.repository` | Image repository | `ghcr.io/pperesbr/conduit` |
-| `image.tag` | Image tag | `1.0.0` |
+| `image.tag` | Image tag | `1.2.0` |
 | `image.pullPolicy` | Image pull policy | `IfNotPresent` |
 | `replicaCount` | Number of replicas | `1` |
 | `ssh.host` | SSH bastion hostname | `""` |
@@ -371,7 +387,10 @@ No restart required!
 
 In Kubernetes, update the Helm release to change tunnels:
 ```bash
-helm upgrade conduit charts/conduit --namespace conduit -f my-values.yaml
+helm upgrade conduit oci://ghcr.io/pperesbr/charts/conduit \
+  --version 1.2.0 \
+  --namespace conduit \
+  -f my-values.yaml
 ```
 
 ## Logs
