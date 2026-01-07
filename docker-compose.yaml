@@ -1,0 +1,12 @@
+services:
+  conduit:
+    build: .
+    container_name: conduit
+    restart: unless-stopped
+    ports:
+      - "1521:1521"
+      - "1522:1522"
+    volumes:
+      - ./config.yaml:/app/config/config.yaml:ro
+    environment:
+      - SSH_PASSWORD=${SSH_PASSWORD}
