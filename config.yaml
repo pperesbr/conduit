@@ -1,0 +1,22 @@
+ssh:
+  user: g0004830
+  password: ${SSH_PASSWORD}
+  host: 10.113.114.9
+  port: 22
+
+tunnels:
+  - name: sigitm
+    remoteHost: 10.240.47.114
+    remotePort: 1521
+    localPort: 1521
+    autoRestart:
+      enabled: true
+      interval: 30s
+
+  - name: ods
+    remoteHost: 10.240.47.3
+    remotePort: 1521
+    localPort: 1522
+    autoRestart:
+      enabled: true
+      interval: 30s
